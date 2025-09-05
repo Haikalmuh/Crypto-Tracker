@@ -1,103 +1,208 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useMemo } from "react";
+import { TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
+import type { CryptoCoin, SortKey } from "@/types/crypto";
+import CoinCard from "@/components/CoinCard";
+import { CoinsGridSkeleton } from "@/components/LoadingSkeletons";
+import Navbar from "@/components/Navbar";
+import ControlsBar from "@/components/ControlsBar";
+import { useCoins } from "@/context/CoinContext";
+import Hero from "@/components/Hero";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { coins, loading, error, lastUpdated, refresh } = useCoins();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // filter / sort state
+  const [search, setSearch] = useState("");
+  const [only, setOnly] = useState<"all" | "gainers" | "losers">("all");
+  const [order, setOrder] = useState<SortKey>("market_cap_desc");
+
+  // filter & sort logic
+  const filteredCoins = useMemo(() => {
+    let list = [...coins];
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (coin) =>
+          coin.name.toLowerCase().includes(q) ||
+          coin.symbol.toLowerCase().includes(q)
+      );
+    }
+
+    if (only === "gainers") {
+      list = list.filter((coin) => (coin.price_change_percentage_24h ?? 0) > 0);
+    } else if (only === "losers") {
+      list = list.filter((coin) => (coin.price_change_percentage_24h ?? 0) < 0);
+    }
+
+    const comparators: Record<
+      SortKey,
+      (a: CryptoCoin, b: CryptoCoin) => number
+    > = {
+      market_cap_desc: (a, b) => b.market_cap - a.market_cap,
+      market_cap_asc: (a, b) => a.market_cap - b.market_cap,
+      price_desc: (a, b) => b.current_price - a.current_price,
+      price_asc: (a, b) => a.current_price - b.current_price,
+      price_change_percentage_24h_desc: (a, b) =>
+        (b.price_change_percentage_24h ?? 0) -
+        (a.price_change_percentage_24h ?? 0),
+      price_change_percentage_24h_asc: (a, b) =>
+        (a.price_change_percentage_24h ?? 0) -
+        (b.price_change_percentage_24h ?? 0),
+      volume_desc: (a, b) => b.total_volume - a.total_volume,
+      volume_asc: (a, b) => a.total_volume - b.total_volume,
+    };
+
+    return list.sort(comparators[order]);
+  }, [coins, search, only, order]);
+
+  if (error && !loading) {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="text-center">
+              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Oops! Something went wrong
+              </h1>
+              <p className="text-muted-foreground mb-6">{error}</p>
+              <button
+                onClick={refresh}
+                className="inline-flex items-center space-x-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Try Again</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+        
+        {/* Hero */}
+        <Hero lastUpdated={lastUpdated} loading={loading} onRefresh={refresh} />
+
+        {/* Controls + Grid */}
+        <section className="py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-foreground">
+                Top 50 Cryptocurrencies
+              </h2>
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredCoins.length} coins
+              </div>
+            </div>
+
+            <ControlsBar
+              search={search}
+              onSearchChange={setSearch}
+              only={only}
+              onOnlyChange={setOnly}
+              order={order}
+              onOrderChange={setOrder}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+
+            {loading ? (
+              <CoinsGridSkeleton />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+                {filteredCoins.map((coin, index) => (
+                  <div
+                    key={coin.id}
+                    className="animate-slide-up"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <CoinCard coin={coin} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Market Stats */}
+            {!loading && coins.length > 0 && (
+              <div className="mt-16 p-6 bg-card border border-border rounded-xl">
+                <h3 className="text-lg font-semibold mb-4">
+                  Market Overview
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Gainers (24h)
+                    </p>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {
+                        coins.filter(
+                          (c) => (c.price_change_percentage_24h ?? 0) > 0
+                        ).length
+                      }
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-red-50 dark:bg-red-950/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Losers (24h)
+                    </p>
+                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                      {
+                        coins.filter(
+                          (c) => (c.price_change_percentage_24h ?? 0) < 0
+                        ).length
+                      }
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Avg. Change
+                    </p>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {coins.length > 0
+                        ? `${(
+                            coins.reduce(
+                              (sum, c) =>
+                                sum + (c.price_change_percentage_24h ?? 0),
+                              0
+                            ) / coins.length
+                          ).toFixed(2)}%`
+                        : "0%"}
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Total Coins
+                    </p>
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      {coins.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <style jsx>{`
+          .gradient-text {
+            background: linear-gradient(
+              135deg,
+              hsl(var(--primary)),
+              hsl(var(--primary) / 0.7)
+            );
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+          }
+        `}</style>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+    </>
   );
 }
