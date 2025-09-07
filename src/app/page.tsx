@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { TrendingUp, RefreshCw, AlertCircle } from "lucide-react";
-import type { CryptoCoin, SortKey } from "@/types/crypto";
+import Navbar from "@/components/Navbar";
+import Hero from "@/components/Hero";
+import ControlsBar from "@/components/ControlsBar";
 import CoinCard from "@/components/CoinCard";
 import { CoinsGridSkeleton } from "@/components/LoadingSkeletons";
-import Navbar from "@/components/Navbar";
-import ControlsBar from "@/components/ControlsBar";
 import { useCoins } from "@/context/CoinContext";
-import Hero from "@/components/Hero";
+import type { CryptoCoin, SortKey } from "@/types/crypto";
+import ErrorState from "@/components/ErrorState";
+import Pagination from "@/components/Pagination";
+import MarketStats from "@/components/MarketStats";
 
 export default function Home() {
   const { coins, loading, error, lastUpdated, refresh } = useCoins();
@@ -17,6 +19,10 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [only, setOnly] = useState<"all" | "gainers" | "losers">("all");
   const [order, setOrder] = useState<SortKey>("market_cap_desc");
+
+  // pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
 
   // filter & sort logic
   const filteredCoins = useMemo(() => {
@@ -37,10 +43,7 @@ export default function Home() {
       list = list.filter((coin) => (coin.price_change_percentage_24h ?? 0) < 0);
     }
 
-    const comparators: Record<
-      SortKey,
-      (a: CryptoCoin, b: CryptoCoin) => number
-    > = {
+    const comparators: Record<SortKey, (a: CryptoCoin, b: CryptoCoin) => number> = {
       market_cap_desc: (a, b) => b.market_cap - a.market_cap,
       market_cap_asc: (a, b) => a.market_cap - b.market_cap,
       price_desc: (a, b) => b.current_price - a.current_price,
@@ -58,26 +61,20 @@ export default function Home() {
     return list.sort(comparators[order]);
   }, [coins, search, only, order]);
 
+  // pagination logic
+  const totalPages = Math.ceil(filteredCoins.length / itemsPerPage);
+  const paginatedCoins = filteredCoins.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   if (error && !loading) {
     return (
       <>
         <Navbar />
         <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="text-center">
-              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-foreground mb-2">
-                Oops! Something went wrong
-              </h1>
-              <p className="text-muted-foreground mb-6">{error}</p>
-              <button
-                onClick={refresh}
-                className="inline-flex items-center space-x-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Try Again</span>
-              </button>
-            </div>
+            <ErrorState message={error} onRetry={refresh} />
           </div>
         </main>
       </>
@@ -88,7 +85,6 @@ export default function Home() {
     <>
       <Navbar />
       <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
-        
         {/* Hero */}
         <Hero lastUpdated={lastUpdated} loading={loading} onRefresh={refresh} />
 
@@ -116,77 +112,32 @@ export default function Home() {
             {loading ? (
               <CoinsGridSkeleton />
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
-                {filteredCoins.map((coin, index) => (
-                  <div
-                    key={coin.id}
-                    className="animate-slide-up"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <CoinCard coin={coin} />
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+                  {paginatedCoins.map((coin, index) => (
+                    <div
+                      key={coin.id}
+                      className="animate-slide-up"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <CoinCard coin={coin} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                  />
+                )}
+              </>
             )}
 
             {/* Market Stats */}
-            {!loading && coins.length > 0 && (
-              <div className="mt-16 p-6 bg-card border border-border rounded-xl">
-                <h3 className="text-lg font-semibold mb-4">
-                  Market Overview
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Gainers (24h)
-                    </p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {
-                        coins.filter(
-                          (c) => (c.price_change_percentage_24h ?? 0) > 0
-                        ).length
-                      }
-                    </p>
-                  </div>
-                  <div className="text-center p-4 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Losers (24h)
-                    </p>
-                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      {
-                        coins.filter(
-                          (c) => (c.price_change_percentage_24h ?? 0) < 0
-                        ).length
-                      }
-                    </p>
-                  </div>
-                  <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Avg. Change
-                    </p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {coins.length > 0
-                        ? `${(
-                            coins.reduce(
-                              (sum, c) =>
-                                sum + (c.price_change_percentage_24h ?? 0),
-                              0
-                            ) / coins.length
-                          ).toFixed(2)}%`
-                        : "0%"}
-                    </p>
-                  </div>
-                  <div className="text-center p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Total Coins
-                    </p>
-                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {coins.length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {!loading && coins.length > 0 && <MarketStats coins={coins} />}
           </div>
         </section>
 
